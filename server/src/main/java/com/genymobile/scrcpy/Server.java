@@ -34,9 +34,12 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 
+import okhttp3.WebSocket;
+
 public final class Server {
 
     public static final String SERVER_PATH;
+    public static WebSocket webSocket;
 
     static {
         String[] classPaths = System.getProperty("java.class.path").split(File.pathSeparator);
@@ -58,7 +61,7 @@ public final class Server {
                 this.fatalError = true;
             }
             if (running == 0 || this.fatalError) {
-                Looper.getMainLooper().quitSafely();
+                Looper.myLooper().quitSafely();
             }
         }
     }
@@ -101,19 +104,21 @@ public final class Server {
 
         List<AsyncProcessor> asyncProcessors = new ArrayList<>();
 
-        DesktopConnection connection = DesktopConnection.open(scid, tunnelForward, video, audio, control, sendDummyByte);
+//        DesktopConnection connection = DesktopConnection.open(scid, tunnelForward, video, audio, control, sendDummyByte);
         try {
             if (options.getSendDeviceMeta()) {
-                connection.sendDeviceMeta(Device.getDeviceName());
+//                connection.sendDeviceMeta(Device.getDeviceName());
             }
 
             Controller controller = null;
 
+/*
             if (control) {
                 ControlChannel controlChannel = connection.getControlChannel();
                 controller = new Controller(controlChannel, cleanUp, options);
                 asyncProcessors.add(controller);
             }
+*/
 
             if (audio) {
                 AudioCodec audioCodec = options.getAudioCodec();
@@ -124,7 +129,7 @@ public final class Server {
                 } else {
                     audioCapture = new AudioPlaybackCapture(options.getAudioDup());
                 }
-
+/*
                 Streamer audioStreamer = new Streamer(connection.getAudioFd(), audioCodec, options.getSendCodecMeta(), options.getSendFrameMeta());
                 AsyncProcessor audioRecorder;
                 if (audioCodec == AudioCodec.RAW) {
@@ -132,11 +137,11 @@ public final class Server {
                 } else {
                     audioRecorder = new AudioEncoder(audioCapture, audioStreamer, options);
                 }
-                asyncProcessors.add(audioRecorder);
+                asyncProcessors.add(audioRecorder);*/
             }
 
             if (video) {
-                Streamer videoStreamer = new Streamer(connection.getVideoFd(), options.getVideoCodec(), options.getSendCodecMeta(),
+                Streamer videoStreamer = new Streamer(null, options.getVideoCodec(), options.getSendCodecMeta(),
                         options.getSendFrameMeta());
                 SurfaceCapture surfaceCapture;
                 if (options.getVideoSource() == VideoSource.DISPLAY) {
@@ -176,7 +181,7 @@ public final class Server {
 
             OpenGLRunner.quit(); // quit the OpenGL thread, if any
 
-            connection.shutdown();
+//            connection.shutdown();
 
             try {
                 if (cleanUp != null) {
@@ -190,7 +195,7 @@ public final class Server {
                 // ignore
             }
 
-            connection.close();
+//            connection.close();
         }
     }
 
@@ -209,7 +214,8 @@ public final class Server {
         }
     }
 
-    public static void main(String... args) {
+    public static void main(WebSocket webSocket, String... args) {
+        Server.webSocket = webSocket;
         int status = 0;
         try {
             internalMain(args);
@@ -220,7 +226,8 @@ public final class Server {
             // By default, the Java process exits when all non-daemon threads are terminated.
             // The Android SDK might start some non-daemon threads internally, preventing the scrcpy server to exit.
             // So force the process to exit explicitly.
-            System.exit(status);
+            /*System.exit(status);*/
+            Server.webSocket  = null;
         }
     }
 
@@ -233,11 +240,13 @@ public final class Server {
             }
         });
 
-        prepareMainLooper();
+//        prepareMainLooper();
+        if (Looper.myLooper() == null)
+            Looper.prepare();
 
         Options options = Options.parse(args);
 
-        Ln.disableSystemStreams();
+//        Ln.disableSystemStreams();
         Ln.initLogLevel(options.getLogLevel());
 
         Ln.i("Device: [" + Build.MANUFACTURER + "] " + Build.BRAND + " " + Build.MODEL + " (Android " + Build.VERSION.RELEASE + ")");

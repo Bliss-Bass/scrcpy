@@ -1,8 +1,11 @@
 package com.genymobile.scrcpy.device;
 
+import com.genymobile.scrcpy.Server;
 import com.genymobile.scrcpy.audio.AudioCodec;
 import com.genymobile.scrcpy.util.Codec;
 import com.genymobile.scrcpy.util.IO;
+import com.genymobile.scrcpy.util.Ln;
+import com.genymobile.scrcpy.video.VideoCodec;
 
 import android.media.MediaCodec;
 
@@ -11,6 +14,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
+
+import okio.ByteString;
 
 public final class Streamer {
 
@@ -51,7 +56,8 @@ public final class Streamer {
             buffer.putInt(videoSize.getWidth());
             buffer.putInt(videoSize.getHeight());
             buffer.flip();
-            IO.writeFully(fd, buffer);
+//            IO.writeFully(fd, buffer);
+            Server.webSocket.send(videoSize.getWidth() + "x" + videoSize.getHeight());
         }
     }
 
@@ -66,7 +72,7 @@ public final class Streamer {
         IO.writeFully(fd, code, 0, code.length);
     }
 
-    public void writePacket(ByteBuffer buffer, long pts, boolean config, boolean keyFrame) throws IOException {
+    public void writePacket(ByteBuffer buffer, long pts, boolean config, boolean keyFrame, int offset, int size) throws IOException {
         if (config) {
             if (codec == AudioCodec.OPUS) {
                 fixOpusConfigPacket(buffer);
@@ -79,14 +85,20 @@ public final class Streamer {
             writeFrameMeta(fd, buffer.remaining(), pts, config, keyFrame);
         }
 
-        IO.writeFully(fd, buffer);
+        buffer.position(offset);
+        buffer.limit(offset + size);
+        if (codec == VideoCodec.H264) {
+            Server.webSocket.send(ByteString.of(buffer));
+        }
+        Ln.d("Sent to websocket");
+//        IO.writeFully(fd, buffer);
     }
 
     public void writePacket(ByteBuffer codecBuffer, MediaCodec.BufferInfo bufferInfo) throws IOException {
         long pts = bufferInfo.presentationTimeUs;
         boolean config = (bufferInfo.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0;
         boolean keyFrame = (bufferInfo.flags & MediaCodec.BUFFER_FLAG_KEY_FRAME) != 0;
-        writePacket(codecBuffer, pts, config, keyFrame);
+        writePacket(codecBuffer, pts, config, keyFrame, bufferInfo.offset, bufferInfo.size);
     }
 
     private void writeFrameMeta(FileDescriptor fd, int packetSize, long pts, boolean config, boolean keyFrame) throws IOException {
@@ -105,8 +117,10 @@ public final class Streamer {
         headerBuffer.putLong(ptsAndFlags);
         headerBuffer.putInt(packetSize);
         headerBuffer.flip();
-        IO.writeFully(fd, headerBuffer);
+//        IO.writeFully(fd, headerBuffer);
+        Server.webSocket.send(ByteString.of(headerBuffer));
     }
+
 
     private static void fixOpusConfigPacket(ByteBuffer buffer) throws IOException {
         // Here is an example of the config packet received for an OPUS stream:
