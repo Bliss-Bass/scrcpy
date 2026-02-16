@@ -129,15 +129,15 @@ public final class Server {
                 } else {
                     audioCapture = new AudioPlaybackCapture(options.getAudioDup());
                 }
-/*
-                Streamer audioStreamer = new Streamer(connection.getAudioFd(), audioCodec, options.getSendCodecMeta(), options.getSendFrameMeta());
+
+                Streamer audioStreamer = new Streamer(null, audioCodec, options.getSendCodecMeta(), options.getSendFrameMeta());
                 AsyncProcessor audioRecorder;
                 if (audioCodec == AudioCodec.RAW) {
                     audioRecorder = new AudioRawRecorder(audioCapture, audioStreamer);
                 } else {
                     audioRecorder = new AudioEncoder(audioCapture, audioStreamer, options);
                 }
-                asyncProcessors.add(audioRecorder);*/
+                asyncProcessors.add(audioRecorder);
             }
 
             if (video) {

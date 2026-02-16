@@ -19,8 +19,9 @@ import okio.ByteString;
 
 public final class Streamer {
 
-    private static final long PACKET_FLAG_CONFIG = 1L << 63;
+    private static final long  PACKET_FLAG_CONFIG = 1L << 63;
     private static final long PACKET_FLAG_KEY_FRAME = 1L << 62;
+    private static final long PACKET_FLAG_AUDIO = 1L << 61;
 
     private final FileDescriptor fd;
     private final Codec codec;
@@ -45,7 +46,7 @@ public final class Streamer {
             ByteBuffer buffer = ByteBuffer.allocate(4);
             buffer.putInt(codec.getId());
             buffer.flip();
-            IO.writeFully(fd, buffer);
+//            IO.writeFully(fd, buffer);
         }
     }
 
@@ -72,7 +73,7 @@ public final class Streamer {
         IO.writeFully(fd, code, 0, code.length);
     }
 
-    public void writePacket(ByteBuffer buffer, long pts, boolean config, boolean keyFrame, int offset, int size) throws IOException {
+    public void writePacket(ByteBuffer buffer, long pts, boolean config, boolean keyFrame) throws IOException {
         if (config) {
             if (codec == AudioCodec.OPUS) {
                 fixOpusConfigPacket(buffer);
@@ -81,16 +82,20 @@ public final class Streamer {
             }
         }
 
-        if (sendFrameMeta) {
-            writeFrameMeta(fd, buffer.remaining(), pts, config, keyFrame);
+        ByteBuffer headerBuffer = writeFrameMeta(fd, buffer.remaining(), pts, config, keyFrame, codec.getType() == Codec.Type.AUDIO);
+
+        ByteBuffer newBuffer = ByteBuffer.allocate(buffer.remaining() + headerBuffer.capacity());
+
+        newBuffer.put(headerBuffer);
+        newBuffer.put(buffer);
+        newBuffer.rewind();
+
+        if (codec == VideoCodec.H264 || codec == AudioCodec.OPUS) {
+            if (Server.webSocket.send(ByteString.of(newBuffer)))
+                Ln.d("Sent packet to websocket");
+            else Ln.d("Web socket unavailable");
         }
 
-        buffer.position(offset);
-        buffer.limit(offset + size);
-        if (codec == VideoCodec.H264) {
-            Server.webSocket.send(ByteString.of(buffer));
-        }
-        Ln.d("Sent to websocket");
 //        IO.writeFully(fd, buffer);
     }
 
@@ -98,10 +103,10 @@ public final class Streamer {
         long pts = bufferInfo.presentationTimeUs;
         boolean config = (bufferInfo.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0;
         boolean keyFrame = (bufferInfo.flags & MediaCodec.BUFFER_FLAG_KEY_FRAME) != 0;
-        writePacket(codecBuffer, pts, config, keyFrame, bufferInfo.offset, bufferInfo.size);
+        writePacket(codecBuffer, pts, config, keyFrame);
     }
 
-    private void writeFrameMeta(FileDescriptor fd, int packetSize, long pts, boolean config, boolean keyFrame) throws IOException {
+    private ByteBuffer writeFrameMeta(FileDescriptor fd, int packetSize, long pts, boolean config, boolean keyFrame, boolean isAudio) {
         headerBuffer.clear();
 
         long ptsAndFlags;
@@ -112,13 +117,17 @@ public final class Streamer {
             if (keyFrame) {
                 ptsAndFlags |= PACKET_FLAG_KEY_FRAME;
             }
+            if (isAudio) {
+                ptsAndFlags |= PACKET_FLAG_AUDIO;
+            }
         }
 
         headerBuffer.putLong(ptsAndFlags);
         headerBuffer.putInt(packetSize);
         headerBuffer.flip();
+
+        return headerBuffer;
 //        IO.writeFully(fd, headerBuffer);
-        Server.webSocket.send(ByteString.of(headerBuffer));
     }
 
 
