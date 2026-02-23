@@ -117,9 +117,10 @@ public final class Streamer {
             if (keyFrame) {
                 ptsAndFlags |= PACKET_FLAG_KEY_FRAME;
             }
-            if (isAudio) {
-                ptsAndFlags |= PACKET_FLAG_AUDIO;
-            }
+        }
+
+        if (isAudio) {
+            ptsAndFlags |= PACKET_FLAG_AUDIO;
         }
 
         headerBuffer.putLong(ptsAndFlags);
