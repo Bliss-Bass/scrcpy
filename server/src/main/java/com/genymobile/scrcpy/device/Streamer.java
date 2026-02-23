@@ -76,7 +76,7 @@ public final class Streamer {
     public void writePacket(ByteBuffer buffer, long pts, boolean config, boolean keyFrame) throws IOException {
         if (config) {
             if (codec == AudioCodec.OPUS) {
-                fixOpusConfigPacket(buffer);
+//                fixOpusConfigPacket(buffer);
             } else if (codec == AudioCodec.FLAC) {
                 fixFlacConfigPacket(buffer);
             }
