@@ -182,7 +182,8 @@ public final class CleanUp {
 
     @SuppressWarnings("deprecation")
     private static void prepareMainLooper() {
-        Looper.prepareMainLooper();
+//        Looper.prepareMainLooper();
+        Looper.prepare();
     }
 
     public static void main(String... args) {

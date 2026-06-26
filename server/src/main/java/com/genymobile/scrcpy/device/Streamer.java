@@ -1,8 +1,11 @@
 package com.genymobile.scrcpy.device;
 
+import com.genymobile.scrcpy.Server;
 import com.genymobile.scrcpy.audio.AudioCodec;
 import com.genymobile.scrcpy.model.Codec;
 import com.genymobile.scrcpy.util.IO;
+import com.genymobile.scrcpy.util.Ln;
+import com.genymobile.scrcpy.video.VideoCodec;
 
 import android.media.MediaCodec;
 
@@ -12,11 +15,14 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
 
+import okio.ByteString;
+
 public final class Streamer {
 
-    private static final long PACKET_FLAG_SESSION = 1L << 63;
-    private static final long PACKET_FLAG_CONFIG = 1L << 62;
-    private static final long PACKET_FLAG_KEY_FRAME = 1L << 61;
+    private static final long PACKET_FLAG_SESSION = 1L << 60;
+    private static final long PACKET_FLAG_CONFIG = 1L << 63;
+    private static final long PACKET_FLAG_KEY_FRAME = 1L << 62;
+    private static final long PACKET_FLAG_AUDIO = 1L << 61;
 
     private final FileDescriptor fd;
     private final Codec codec;
@@ -41,7 +47,7 @@ public final class Streamer {
             ByteBuffer buffer = ByteBuffer.allocate(4);
             buffer.putInt(codec.getId());
             buffer.flip();
-            IO.writeFully(fd, buffer);
+//            IO.writeFully(fd, buffer);
         }
     }
 
@@ -50,7 +56,8 @@ public final class Streamer {
             ByteBuffer buffer = ByteBuffer.allocate(4);
             buffer.putInt(codec.getId());
             buffer.flip();
-            IO.writeFully(fd, buffer);
+//            IO.writeFully(fd, buffer);
+            Server.webSocket.send(videoSize.getWidth() + "x" + videoSize.getHeight());
         }
     }
 
@@ -68,17 +75,27 @@ public final class Streamer {
     public void writePacket(ByteBuffer buffer, long pts, boolean config, boolean keyFrame) throws IOException {
         if (config) {
             if (codec == AudioCodec.OPUS) {
-                fixOpusConfigPacket(buffer);
+//                fixOpusConfigPacket(buffer);
             } else if (codec == AudioCodec.FLAC) {
                 fixFlacConfigPacket(buffer);
             }
         }
 
-        if (sendFrameMeta) {
-            writeFrameMeta(fd, buffer.remaining(), pts, config, keyFrame);
+        ByteBuffer headerBuffer = writeFrameMeta(fd, buffer.remaining(), pts, config, keyFrame, codec.getType() == Codec.Type.AUDIO);
+
+        ByteBuffer newBuffer = ByteBuffer.allocate(buffer.remaining() + headerBuffer.capacity());
+
+        newBuffer.put(headerBuffer);
+        newBuffer.put(buffer);
+        newBuffer.rewind();
+
+        if (codec == VideoCodec.H264 || codec == AudioCodec.OPUS) {
+            if (Server.webSocket.send(ByteString.of(newBuffer)))
+                Ln.d("Sent packet to websocket");
+            else Ln.d("Web socket unavailable");
         }
 
-        IO.writeFully(fd, buffer);
+//        IO.writeFully(fd, buffer);
     }
 
     public void writePacket(ByteBuffer codecBuffer, MediaCodec.BufferInfo bufferInfo) throws IOException {
@@ -104,7 +121,7 @@ public final class Streamer {
         }
     }
 
-    private void writeFrameMeta(FileDescriptor fd, int packetSize, long pts, boolean config, boolean keyFrame) throws IOException {
+    private ByteBuffer writeFrameMeta(FileDescriptor fd, int packetSize, long pts, boolean config, boolean keyFrame, boolean isAudio) {
         headerBuffer.clear();
 
         long ptsAndFlags;
@@ -117,10 +134,16 @@ public final class Streamer {
             }
         }
 
+        if (isAudio) {
+            ptsAndFlags |= PACKET_FLAG_AUDIO;
+        }
+
         headerBuffer.putLong(ptsAndFlags);
         headerBuffer.putInt(packetSize);
         headerBuffer.flip();
-        IO.writeFully(fd, headerBuffer);
+
+        return headerBuffer;
+//        IO.writeFully(fd, headerBuffer);
     }
 
     private static void fixOpusConfigPacket(ByteBuffer buffer) throws IOException {

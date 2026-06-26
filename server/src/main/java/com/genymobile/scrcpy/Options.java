@@ -321,10 +321,10 @@ public class Options {
         }
 
         String clientVersion = args[0];
-        if (!clientVersion.equals(BuildConfig.VERSION_NAME)) {
+/*         if (!clientVersion.equals(BuildConfig.VERSION_NAME)) {
             throw new IllegalArgumentException(
                     "The server version (" + BuildConfig.VERSION_NAME + ") does not match the client " + "(" + clientVersion + ")");
-        }
+        } */
 
         Options options = new Options();
 
@@ -555,9 +555,11 @@ public class Options {
                     boolean rawStream = Boolean.parseBoolean(value);
                     if (rawStream) {
                         options.sendDeviceMeta = false;
-                        options.sendFrameMeta = false;
+/*                        options.sendFrameMeta = false;
                         options.sendDummyByte = false;
-                        options.sendStreamMeta = false;
+                        options.sendCodecMeta = false;*/
+                        options.sendStreamMeta = true;
+                        options.sendFrameMeta = true;
                     }
                     break;
                 default:
