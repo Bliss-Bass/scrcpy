@@ -2,7 +2,7 @@ package com.genymobile.scrcpy.device;
 
 import com.genymobile.scrcpy.Server;
 import com.genymobile.scrcpy.audio.AudioCodec;
-import com.genymobile.scrcpy.util.Codec;
+import com.genymobile.scrcpy.model.Codec;
 import com.genymobile.scrcpy.util.IO;
 import com.genymobile.scrcpy.util.Ln;
 import com.genymobile.scrcpy.video.VideoCodec;
@@ -19,13 +19,14 @@ import okio.ByteString;
 
 public final class Streamer {
 
-    private static final long  PACKET_FLAG_CONFIG = 1L << 63;
+    private static final long PACKET_FLAG_SESSION = 1L << 60;
+    private static final long PACKET_FLAG_CONFIG = 1L << 63;
     private static final long PACKET_FLAG_KEY_FRAME = 1L << 62;
     private static final long PACKET_FLAG_AUDIO = 1L << 61;
 
     private final FileDescriptor fd;
     private final Codec codec;
-    private final boolean sendCodecMeta;
+    private final boolean sendStreamMeta;
     private final boolean sendFrameMeta;
 
     private final ByteBuffer headerBuffer = ByteBuffer.allocate(12);
@@ -33,7 +34,7 @@ public final class Streamer {
     public Streamer(FileDescriptor fd, Codec codec, boolean sendCodecMeta, boolean sendFrameMeta) {
         this.fd = fd;
         this.codec = codec;
-        this.sendCodecMeta = sendCodecMeta;
+        this.sendStreamMeta = sendCodecMeta;
         this.sendFrameMeta = sendFrameMeta;
     }
 
@@ -42,7 +43,7 @@ public final class Streamer {
     }
 
     public void writeAudioHeader() throws IOException {
-        if (sendCodecMeta) {
+        if (sendStreamMeta) {
             ByteBuffer buffer = ByteBuffer.allocate(4);
             buffer.putInt(codec.getId());
             buffer.flip();
@@ -50,12 +51,10 @@ public final class Streamer {
         }
     }
 
-    public void writeVideoHeader(Size videoSize) throws IOException {
-        if (sendCodecMeta) {
-            ByteBuffer buffer = ByteBuffer.allocate(12);
+    public void writeVideoHeader() throws IOException {
+        if (sendStreamMeta) {
+            ByteBuffer buffer = ByteBuffer.allocate(4);
             buffer.putInt(codec.getId());
-            buffer.putInt(videoSize.getWidth());
-            buffer.putInt(videoSize.getHeight());
             buffer.flip();
 //            IO.writeFully(fd, buffer);
             Server.webSocket.send(videoSize.getWidth() + "x" + videoSize.getHeight());
@@ -106,6 +105,22 @@ public final class Streamer {
         writePacket(codecBuffer, pts, config, keyFrame);
     }
 
+    public void writeSessionMeta(int width, int height, boolean isClientResize) throws IOException {
+        if (sendStreamMeta) {
+            headerBuffer.clear();
+
+            int flags = (int) (PACKET_FLAG_SESSION >> 32); // set the first bit to 1
+            if (isClientResize) {
+                flags |= 1;
+            }
+            headerBuffer.putInt(flags);
+            headerBuffer.putInt(width);
+            headerBuffer.putInt(height);
+            headerBuffer.flip();
+            IO.writeFully(fd, headerBuffer);
+        }
+    }
+
     private ByteBuffer writeFrameMeta(FileDescriptor fd, int packetSize, long pts, boolean config, boolean keyFrame, boolean isAudio) {
         headerBuffer.clear();
 
@@ -130,7 +145,6 @@ public final class Streamer {
         return headerBuffer;
 //        IO.writeFully(fd, headerBuffer);
     }
-
 
     private static void fixOpusConfigPacket(ByteBuffer buffer) throws IOException {
         // Here is an example of the config packet received for an OPUS stream:
