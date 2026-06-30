@@ -15,8 +15,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
 
-import okio.ByteString;
-
 public final class Streamer {
 
     private static final long  PACKET_FLAG_CONFIG = 1L << 63;
@@ -58,7 +56,7 @@ public final class Streamer {
             buffer.putInt(videoSize.getHeight());
             buffer.flip();
 //            IO.writeFully(fd, buffer);
-            Server.webSocket.send(videoSize.getWidth() + "x" + videoSize.getHeight());
+            Server.webSocket.sendString(videoSize.getWidth() + "x" + videoSize.getHeight());
         }
     }
 
@@ -91,7 +89,7 @@ public final class Streamer {
         newBuffer.rewind();
 
         if (codec == VideoCodec.H264 || codec == AudioCodec.OPUS) {
-            if (Server.webSocket.send(ByteString.of(newBuffer)))
+            if (Server.webSocket.sendBytes(newBuffer.array()))
                 Ln.d("Sent packet to websocket");
             else Ln.d("Web socket unavailable");
         }

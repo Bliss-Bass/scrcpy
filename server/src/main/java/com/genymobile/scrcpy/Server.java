@@ -7,10 +7,8 @@ import com.genymobile.scrcpy.audio.AudioEncoder;
 import com.genymobile.scrcpy.audio.AudioPlaybackCapture;
 import com.genymobile.scrcpy.audio.AudioRawRecorder;
 import com.genymobile.scrcpy.audio.AudioSource;
-import com.genymobile.scrcpy.control.ControlChannel;
 import com.genymobile.scrcpy.control.Controller;
 import com.genymobile.scrcpy.device.ConfigurationException;
-import com.genymobile.scrcpy.device.DesktopConnection;
 import com.genymobile.scrcpy.device.Device;
 import com.genymobile.scrcpy.device.NewDisplay;
 import com.genymobile.scrcpy.device.Streamer;
@@ -39,7 +37,7 @@ import okhttp3.WebSocket;
 public final class Server {
 
     public static final String SERVER_PATH;
-    public static WebSocket webSocket;
+    public static WebSocketBridge webSocket;
 
     static {
         String[] classPaths = System.getProperty("java.class.path").split(File.pathSeparator);
@@ -214,8 +212,14 @@ public final class Server {
         }
     }
 
-    public static void main(WebSocket webSocket, String... args) {
-        Server.webSocket = webSocket;
+    public interface WebSocketBridge {
+        boolean sendString(String text);
+        boolean sendBytes(byte[] data);
+    }
+
+    public static void main(WebSocketBridge wsBridge,
+                            String... args) {
+        Server.webSocket = wsBridge;
         int status = 0;
         try {
             internalMain(args);
@@ -227,7 +231,7 @@ public final class Server {
             // The Android SDK might start some non-daemon threads internally, preventing the scrcpy server to exit.
             // So force the process to exit explicitly.
             /*System.exit(status);*/
-            Server.webSocket  = null;
+            Server.webSocket = null;
         }
     }
 
